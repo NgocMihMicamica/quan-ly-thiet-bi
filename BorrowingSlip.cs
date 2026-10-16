@@ -3,7 +3,6 @@ using System.Collections.Generic;
 
 namespace QuanLyThietBi
 {
-    // Phieu muon: chua nhieu BorrowItem cua mot nguoi muon
     public class BorrowingSlip
     {
         public string SlipId { get; }
@@ -11,7 +10,7 @@ namespace QuanLyThietBi
         public string TeachingRoom { get; }
         public DateTime BorrowedDate { get; }
 
-        private List<BorrowItem> items; // danh sach thiet bi trong phieu
+        private List<BorrowItem> items;
 
         public BorrowingSlip(string slipId, IBorrower borrower, string teachingRoom, DateTime borrowedDate)
         {
@@ -30,21 +29,14 @@ namespace QuanLyThietBi
             get { return items; }
         }
 
-        // them thiet bi vao phieu
         public void AddDevice(Device device, int borrowDays)
         {
-            // kiem tra truoc khi thay doi gi (dam bao tinh nhat quan)
             ValidateBorrowing(device, borrowDays);
-
-            // tao item mới
             BorrowItem item = new BorrowItem(device, BorrowedDate, BorrowedDate.AddDays(borrowDays));
-
-            // chuyen thiet bi sang Borrowed roi them vao phieu
             device.MarkAsBorrowed();
             items.Add(item);
         }
 
-        // kiem tra cac dieu kien de duoc muon
         private void ValidateBorrowing(Device device, int borrowDays)
         {
             if (device == null)
@@ -53,15 +45,28 @@ namespace QuanLyThietBi
             if (borrowDays <= 0)
                 throw new ArgumentException("So ngay muon phai lon hon 0");
 
-            // TODO: con chua kiem tra so ngay vuot gioi han, trung thiet bi,
-            //       gioi han nguoi muon va trang thai Available.
-            //       (de commit sau se bo sung, hien tai? chay tam)
+            // FIX lan 1: kiem tra so ngay vuot gioi han cua thiet bi
+            if (borrowDays > device.MaxBorrowDays)
+                throw new InvalidBorrowPeriodException(device.Code, borrowDays, device.MaxBorrowDays);
+
+            // FIX lan 1: kiem tra thiet bi co dang Available hay khong
+            if (device.Status != DeviceStatus.Available)
+                throw new DeviceUnavailableException(device.Code, device.Status);
+
+            // FIX lan 1: kiem tra thiet bi da co trong phieu chua (trung)
+            foreach (BorrowItem item in items)
+            {
+                if (item.Device.Code == device.Code)
+                    throw new DuplicateDeviceException(device.Code);
+            }
+
+            // FIX lan 1: kiem tra nguoi muon da dat gioi han thiet bi chua
+            if (items.Count >= Borrower.GetMaximumDevices())
+                throw new BorrowLimitExceededException(Borrower.BorrowerId, Borrower.GetMaximumDevices());
         }
 
-        // tra thiet bi, tra ve so tien phat neu tra tre
         public decimal ReturnDevice(string deviceId, DateTime returnedDate)
         {
-            // tim BorrowItem theo ma thiet bi
             BorrowItem item = null;
             foreach (BorrowItem b in items)
             {
@@ -75,15 +80,13 @@ namespace QuanLyThietBi
             if (item == null)
                 throw new DeviceNotInSlipException(deviceId);
 
-            // goi Return() se bat loi tra 2 lan va ngay tra som hon ngay muon
             item.Return(returnedDate);
 
-            // TODO: quen chuyen thiet bi ve Available sau khi tra, can sua lai
+            // TODO: van con quen chuyen thiet bi ve Available sau khi tra, de sau fix
 
             return item.CalculateLateFee();
         }
 
-        // tong phi tra muon cua ca phieu
         public decimal CalculateTotalLateFee()
         {
             decimal total = 0;
