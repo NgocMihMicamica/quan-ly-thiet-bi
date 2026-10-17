@@ -45,24 +45,27 @@ namespace QuanLyThietBi
             if (borrowDays <= 0)
                 throw new ArgumentException("So ngay muon phai lon hon 0");
 
-            // FIX lan 1: kiem tra so ngay vuot gioi han cua thiet bi
+            // kiem tra so ngay vuot gioi han cua thiet bi
             if (borrowDays > device.MaxBorrowDays)
                 throw new InvalidBorrowPeriodException(device.Code, borrowDays, device.MaxBorrowDays);
 
-            // FIX lan 1: kiem tra thiet bi co dang Available hay khong
-            if (device.Status != DeviceStatus.Available)
-                throw new DeviceUnavailableException(device.Code, device.Status);
-
-            // FIX lan 1: kiem tra thiet bi da co trong phieu chua (trung)
+            // FIX lan 2: phai kiem tra trung thiet bi TRUOC khi kiem tra Available.
+            // Vi thiet bi da them lan 1 se chuyen sang Borrowed roi, neu kiem tra
+            // Available truoc thi them lan 2 se throw nham DeviceUnavailableException
+            // thay vi DuplicateDeviceException (gap o ban ver 2).
             foreach (BorrowItem item in items)
             {
                 if (item.Device.Code == device.Code)
                     throw new DuplicateDeviceException(device.Code);
             }
 
-            // FIX lan 1: kiem tra nguoi muon da dat gioi han thiet bi chua
+            // kiem tra nguoi muon da dat gioi han thiet bi chua
             if (items.Count >= Borrower.GetMaximumDevices())
                 throw new BorrowLimitExceededException(Borrower.BorrowerId, Borrower.GetMaximumDevices());
+
+            // kiem tra thiet bi co dang Available hay khong
+            if (device.Status != DeviceStatus.Available)
+                throw new DeviceUnavailableException(device.Code, device.Status);
         }
 
         public decimal ReturnDevice(string deviceId, DateTime returnedDate)
@@ -82,7 +85,9 @@ namespace QuanLyThietBi
 
             item.Return(returnedDate);
 
-            // TODO: van con quen chuyen thiet bi ve Available sau khi tra, de sau fix
+            // FIX lan 2: chuyen thiet bi ve Available sau khi tra
+            // (neu quen dong nay, thiet bi se bi ket o trang thai Borrowed mai)
+            item.Device.MarkAsAvailable();
 
             return item.CalculateLateFee();
         }
